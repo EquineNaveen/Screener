@@ -25,8 +25,8 @@ with st.sidebar:
                     margin-top:3px;text-transform:uppercase;letter-spacing:1.5px;">Dashboard</div>
     </div>""", unsafe_allow_html=True)
 
-    st.page_link("pages/1_Sectors.py", label="📊  Sectors Overview")
-    st.page_link("pages/2_Stocks.py",  label="🔍  Stocks by Sector")
+    st.page_link("pages/Sectors.py", label="📊  Sectors Overview")
+    st.page_link("pages/Stocks.py",  label="🔍  Stocks by Sector")
 
 
 
@@ -95,7 +95,7 @@ with n1:
             Live index % change · Sort · TradingView
         </div>
     </div>""", unsafe_allow_html=True)
-    st.page_link("pages/1_Sectors.py", label="→ Go to Sectors")
+    st.page_link("pages/Sectors.py", label="→ Go to Sectors")
 
 with n2:
     st.markdown("""
@@ -106,4 +106,4 @@ with n2:
             Live price · % change · Sort · TradingView
         </div>
     </div>""", unsafe_allow_html=True)
-    st.page_link("pages/2_Stocks.py", label="→ Go to Stocks")
+    st.page_link("pages/Stocks.py", label="→ Go to Stocks")
