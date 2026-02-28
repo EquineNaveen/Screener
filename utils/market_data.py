@@ -2,6 +2,7 @@ import yfinance as yf
 import pandas as pd
 import streamlit as st
 from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # -----------------------------------------------
 # Sector Index Ticker Mapping
@@ -140,6 +141,41 @@ def _fetch_avg_pct(stocks: list):
     return None, None
 
 
+def _fetch_one_sector(args):
+    """Fetch a single sector — same priority logic as before, runs in thread pool."""
+    sector, sector_stocks = args
+    nse_name   = SECTOR_NSE_API_MAP.get(sector)
+    ticker_sym = SECTOR_TICKER_MAP.get(sector)
+    tv_sym     = SECTOR_TV_MAP.get(sector, "")
+    tv_url     = f"https://www.tradingview.com/chart/?symbol={tv_sym}" if tv_sym else "#"
+    pct, price = None, None
+    source     = "n/a"
+
+    if nse_name:
+        pct, price = _fetch_nse_index(nse_name)
+        if pct is not None:
+            source = "NSE"
+
+    if pct is None and ticker_sym:
+        pct, price = _fetch_yfinance_index(ticker_sym)
+        if pct is not None:
+            source = "YF"
+
+    if pct is None:
+        pct, price = _fetch_avg_pct(sector_stocks.get(sector, []))
+        if pct is not None:
+            source = "avg"
+
+    return sector, {
+        "sector":      sector,
+        "pct_change":  pct,
+        "price":       price,
+        "tv_url":      tv_url,
+        "stock_count": len(sector_stocks.get(sector, [])),
+        "source":      source,
+    }
+
+
 @st.cache_data(ttl=60)
 def get_sector_data(sector_names: tuple, sector_stocks_json: str):
     """
@@ -149,41 +185,41 @@ def get_sector_data(sector_names: tuple, sector_stocks_json: str):
     """
     import json
     sector_stocks = json.loads(sector_stocks_json)
-    results = []
 
-    for sector in sector_names:
-        nse_name   = SECTOR_NSE_API_MAP.get(sector)
-        ticker_sym = SECTOR_TICKER_MAP.get(sector)
-        tv_sym     = SECTOR_TV_MAP.get(sector, "")
-        tv_url     = f"https://www.tradingview.com/chart/?symbol={tv_sym}" if tv_sym else "#"
-        pct, price = None, None
-        source     = "n/a"
+    args = [(sector, sector_stocks) for sector in sector_names]
+    results_map = {}
 
-        if nse_name:
-            pct, price = _fetch_nse_index(nse_name)
-            if pct is not None:
-                source = "NSE"
+    with ThreadPoolExecutor(max_workers=20) as pool:
+        for sector, result in pool.map(_fetch_one_sector, args):
+            results_map[sector] = result
 
-        if pct is None and ticker_sym:
-            pct, price = _fetch_yfinance_index(ticker_sym)
-            if pct is not None:
-                source = "YF"
+    # preserve original order
+    return [results_map[s] for s in sector_names]
 
-        if pct is None:
-            pct, price = _fetch_avg_pct(sector_stocks.get(sector, []))
-            if pct is not None:
-                source = "avg"
 
-        results.append({
-            "sector":      sector,
-            "pct_change":  pct,
-            "price":       price,
-            "tv_url":      tv_url,
-            "stock_count": len(sector_stocks.get(sector, [])),
-            "source":      source,
-        })
-
-    return results
+def _fetch_one_stock(args):
+    """Fetch a single stock — same fast_info logic as before, runs in thread pool."""
+    sym, ns_sym = args
+    t     = None
+    pct, price = None, None
+    try:
+        tickers = yf.Tickers(ns_sym)
+        t = tickers.tickers.get(ns_sym)
+        if t:
+            info  = t.fast_info
+            prev  = info.get("previousClose") or info.get("regular_market_previous_close")
+            curr  = info.get("lastPrice") or info.get("regular_market_price")
+            if prev and curr and float(prev) != 0:
+                pct   = round(((float(curr) - float(prev)) / float(prev)) * 100, 2)
+                price = round(float(curr), 2)
+    except Exception:
+        pass
+    return {
+        "symbol": sym,
+        "price":  price,
+        "pct":    pct,
+        "tv_url": f"https://www.tradingview.com/chart/?symbol=NSE:{sym}",
+    }
 
 
 @st.cache_data(ttl=60)
@@ -193,35 +229,14 @@ def get_stocks_data(symbols: tuple):
     Returns list of dicts.
     """
     ns_syms = [s + ".NS" for s in symbols]
-    rows = []
-    try:
-        tickers = yf.Tickers(" ".join(ns_syms))
-        for sym, ns_sym in zip(symbols, ns_syms):
-            t     = tickers.tickers.get(ns_sym)
-            pct, price = None, None
-            if t:
-                try:
-                    info  = t.fast_info
-                    prev  = info.get("previousClose") or info.get("regular_market_previous_close")
-                    curr  = info.get("lastPrice") or info.get("regular_market_price")
-                    if prev and curr and float(prev) != 0:
-                        pct   = round(((float(curr) - float(prev)) / float(prev)) * 100, 2)
-                        price = round(float(curr), 2)
-                except Exception:
-                    pass
-            rows.append({
-                "symbol": sym,
-                "price":  price,
-                "pct":    pct,
-                "tv_url": f"https://www.tradingview.com/chart/?symbol=NSE:{sym}",
-            })
-    except Exception:
-        for sym in symbols:
-            rows.append({
-                "symbol": sym, "price": None, "pct": None,
-                "tv_url": f"https://www.tradingview.com/chart/?symbol=NSE:{sym}",
-            })
-    return rows
+    args    = list(zip(symbols, ns_syms))
+
+    results_map = {}
+    with ThreadPoolExecutor(max_workers=30) as pool:
+        for result in pool.map(_fetch_one_stock, args):
+            results_map[result["symbol"]] = result
+
+    return [results_map[s] for s in symbols]
 
 
 def is_market_open():
