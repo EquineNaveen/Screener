@@ -1,7 +1,7 @@
 {
   "metadata": {
     "last_updated": "2026-02-28T22:20:18.384848",
-    "total_sectors": 20,
+    "total_sectors": 19,
     "total_fo_symbols_tracked": 206,
     "source": "NSE India"
   },
@@ -331,7 +331,6 @@
       "PGEL",
       "TITAN",
       "VOLTAS"
-    ],
-    "NIFTY MEDIA": []
+    ]
   }
 }
