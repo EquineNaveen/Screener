@@ -4,25 +4,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from utils.data_loader import get_sectors
 from utils.market_data import get_sector_data, is_market_open
-from utils.styles import GLOBAL_CSS
 
-st.set_page_config(page_title="Sectors | NSE F&O", page_icon="📊", layout="wide")
-st.markdown(GLOBAL_CSS, unsafe_allow_html=True)
-
-# ─── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.markdown("""
-    <div style="padding:16px 0 20px 0;border-bottom:1px solid #222;margin-bottom:16px;">
-        <div style="font-size:1.2rem;font-weight:700;letter-spacing:-0.5px;">⚡ NSE F&O</div>
-        <div style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:#444;
-                    margin-top:3px;text-transform:uppercase;letter-spacing:1.5px;">Dashboard</div>
-    </div>""", unsafe_allow_html=True)
-
-    st.page_link("pages/Sectors.py", label="📊  Sectors Overview")
-    st.page_link("pages/Stocks.py",  label="🔍  Stocks by Sector")
-
-    st.markdown('<div style="height:1px;background:#1a1a1a;margin:16px 0;"></div>', unsafe_allow_html=True)
-
+    st.markdown('<div style="height:1px;background:#1a1a1a;margin:4px 0 16px 0;"></div>', unsafe_allow_html=True)
     refresh_interval = st.selectbox("Auto-refresh", ["Off", "30s", "60s", "2min", "5min"], index=2)
     if st.button("↺  Refresh Now"):
         st.cache_data.clear()
@@ -121,10 +105,8 @@ for row_start in range(0, len(sector_data), cols_per_row):
         price_line = f'<div style="font-family:IBM Plex Mono,monospace;font-size:0.75rem;color:#555;margin-top:4px;">&#8377;{price:,.2f}</div>' if price else ""
 
         card = f"""
-        <a href="{tv_url}" target="_blank" style="text-decoration:none;display:block;">
         <div style="background:{card_bg};border:1px solid #222;border-top:2px solid {top_c};
-                    border-radius:10px;padding:18px 16px;margin-bottom:12px;position:relative;overflow:hidden;
-                    transition:border-color 0.2s,transform 0.2s;cursor:pointer;">
+                    border-radius:10px;padding:18px 16px;margin-bottom:12px;position:relative;overflow:hidden;">
             <div style="font-size:0.78rem;font-weight:600;color:#888;margin-bottom:10px;
                         white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="{name}">
                 {name}
@@ -132,15 +114,12 @@ for row_start in range(0, len(sector_data), cols_per_row):
             <div style="font-size:1.65rem;font-weight:700;color:{pct_c};
                         font-family:'IBM Plex Mono',monospace;line-height:1;">{arrow}{pct_disp}</div>
             {price_line}
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;">
-                <span style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:#333;">{sc} stocks</span>
-                <span style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:#f5a623;
-                             background:rgba(245,166,35,0.08);border:1px solid rgba(245,166,35,0.15);
-                             padding:2px 7px;border-radius:3px;">↗ TV</span>
+            <div style="margin-top:12px;">
+                <span style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:#333;">{sc} F&amp;O stocks</span>
             </div>
             <div style="position:absolute;bottom:5px;right:8px;font-family:'IBM Plex Mono',monospace;
                         font-size:0.5rem;color:#222;">{src}</div>
-        </div></a>"""
+        </div>"""
         with col:
             st.markdown(card, unsafe_allow_html=True)
 

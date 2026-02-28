@@ -4,25 +4,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from utils.data_loader import get_sectors
 from utils.market_data import get_stocks_data, is_market_open
-from utils.styles import GLOBAL_CSS
 
-st.set_page_config(page_title="Stocks | NSE F&O", page_icon="🔍", layout="wide")
-st.markdown(GLOBAL_CSS, unsafe_allow_html=True)
-
-# ─── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.markdown("""
-    <div style="padding:16px 0 20px 0;border-bottom:1px solid #222;margin-bottom:16px;">
-        <div style="font-size:1.2rem;font-weight:700;letter-spacing:-0.5px;">⚡ NSE F&O</div>
-        <div style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:#444;
-                    margin-top:3px;text-transform:uppercase;letter-spacing:1.5px;">Dashboard</div>
-    </div>""", unsafe_allow_html=True)
-
-    st.page_link("pages/Sectors.py", label="📊  Sectors Overview")
-    st.page_link("pages/Stocks.py",  label="🔍  Stocks by Sector")
-
-    st.markdown('<div style="height:1px;background:#1a1a1a;margin:16px 0;"></div>', unsafe_allow_html=True)
-
+    st.markdown('<div style="height:1px;background:#1a1a1a;margin:4px 0 16px 0;"></div>', unsafe_allow_html=True)
     refresh_interval = st.selectbox("Auto-refresh", ["Off", "30s", "60s", "2min", "5min"], index=2)
     if st.button("↺  Refresh Now"):
         st.cache_data.clear()

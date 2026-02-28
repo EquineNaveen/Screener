@@ -42,8 +42,8 @@ button[kind="header"]                     { display: none !important; }
 [data-testid="stSidebar"] {
     background: var(--bg2) !important;
     border-right: 1px solid var(--border) !important;
-    min-width: 220px !important;
-    max-width: 220px !important;
+    min-width: 280px !important;
+    max-width: 280px !important;
 }
 [data-testid="stSidebar"] * { color: var(--text) !important; }
 
