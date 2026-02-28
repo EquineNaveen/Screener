@@ -5,12 +5,10 @@ sys.path.insert(0, os.path.dirname(__file__))
 from utils.styles import GLOBAL_CSS
 
 # ─── st.navigation MUST be called before set_page_config ──────────────────────
-# This is the correct Streamlit multipage API. st.page_link only works
-# for pages that are registered here.
+# Files are lowercase: sectors.py and stocks.py — NOT Sectors.py / Stocks.py
 
-home_page    = st.Page("pages/Home.py",    title="Home")
-sectors_page = st.Page("pages/Sectors.py", title="Sectors Overview")
-stocks_page  = st.Page("pages/Stocks.py",  title="Stocks by Sector")
+sectors_page = st.Page("pages/sectors.py", title="Sectors Overview")
+stocks_page  = st.Page("pages/stocks.py",  title="Stocks by Sector")
 
 pg = st.navigation(
     {"NSE F&O": [sectors_page, stocks_page]},
