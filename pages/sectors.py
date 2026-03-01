@@ -104,22 +104,28 @@ for row_start in range(0, len(sector_data), cols_per_row):
 
         price_line = f'<div style="font-family:IBM Plex Mono,monospace;font-size:0.75rem;color:#555;margin-top:4px;">&#8377;{price:,.2f}</div>' if price else ""
 
+        # Wrap the entire card in an anchor tag so the whole card is clickable
         card = f"""
-        <div style="background:{card_bg};border:1px solid #222;border-top:2px solid {top_c};
-                    border-radius:10px;padding:18px 16px;margin-bottom:12px;position:relative;overflow:hidden;">
-            <div style="font-size:0.78rem;font-weight:600;color:#888;margin-bottom:10px;
-                        white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="{name}">
-                {name}
+        <a href="{tv_url}" target="_blank" style="text-decoration:none;display:block;">
+            <div style="background:{card_bg};border:1px solid #222;border-top:2px solid {top_c};
+                        border-radius:10px;padding:18px 16px;margin-bottom:12px;position:relative;
+                        overflow:hidden;cursor:pointer;transition:border-color 0.15s,transform 0.15s;"
+                 onmouseover="this.style.borderColor='{top_c}';this.style.transform='translateY(-2px)'"
+                 onmouseout="this.style.borderColor='#222';this.style.borderTopColor='{top_c}';this.style.transform='translateY(0)'">
+                <div style="font-size:0.78rem;font-weight:600;color:#888;margin-bottom:10px;
+                            white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="{name}">
+                    {name}
+                </div>
+                <div style="font-size:1.65rem;font-weight:700;color:{pct_c};
+                            font-family:'IBM Plex Mono',monospace;line-height:1;">{arrow}{pct_disp}</div>
+                {price_line}
+                <div style="margin-top:12px;">
+                    <span style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:#333;">{sc} F&amp;O stocks</span>
+                </div>
+                <div style="position:absolute;bottom:5px;right:8px;font-family:'IBM Plex Mono',monospace;
+                            font-size:0.5rem;color:#222;">{src}</div>
             </div>
-            <div style="font-size:1.65rem;font-weight:700;color:{pct_c};
-                        font-family:'IBM Plex Mono',monospace;line-height:1;">{arrow}{pct_disp}</div>
-            {price_line}
-            <div style="margin-top:12px;">
-                <span style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:#333;">{sc} F&amp;O stocks</span>
-            </div>
-            <div style="position:absolute;bottom:5px;right:8px;font-family:'IBM Plex Mono',monospace;
-                        font-size:0.5rem;color:#222;">{src}</div>
-        </div>"""
+        </a>"""
         with col:
             st.markdown(card, unsafe_allow_html=True)
 
