@@ -198,26 +198,30 @@ def get_sector_data(sector_names: tuple, sector_stocks_json: str):
 
 
 def _fetch_one_stock(args):
-    """Fetch a single stock — same fast_info logic as before, runs in thread pool."""
+    """Fetch a single stock — price, pct, volume all via yfinance fast_info."""
     sym, ns_sym = args
-    t     = None
-    pct, price = None, None
+    pct, price, volume = None, None, None
     try:
         tickers = yf.Tickers(ns_sym)
         t = tickers.tickers.get(ns_sym)
         if t:
-            info  = t.fast_info
-            prev  = info.get("previousClose") or info.get("regular_market_previous_close")
-            curr  = info.get("lastPrice") or info.get("regular_market_price")
+            info = t.fast_info
+            prev = info.get("previousClose") or info.get("regularMarketPreviousClose")
+            curr = info.get("lastPrice")
+            vol  = info.get("lastVolume")
             if prev and curr and float(prev) != 0:
                 pct   = round(((float(curr) - float(prev)) / float(prev)) * 100, 2)
                 price = round(float(curr), 2)
+            if vol is not None:
+                volume = int(vol)
     except Exception:
         pass
+
     return {
         "symbol": sym,
         "price":  price,
         "pct":    pct,
+        "volume": volume,
         "tv_url": f"https://www.tradingview.com/chart/?symbol=NSE:{sym}",
     }
 
@@ -225,7 +229,7 @@ def _fetch_one_stock(args):
 @st.cache_data(ttl=60)
 def get_stocks_data(symbols: tuple):
     """
-    Fetch price + % change for NSE stocks via yfinance.
+    Fetch price, pct, volume for NSE stocks via yfinance fast_info.
     Returns list of dicts.
     """
     ns_syms = [s + ".NS" for s in symbols]
@@ -245,3 +249,40 @@ def is_market_open():
     if now.weekday() >= 5:
         return False
     return now.replace(hour=9, minute=15, second=0, microsecond=0) <= now <= now.replace(hour=15, minute=30, second=0, microsecond=0)
+
+
+
+
+@st.cache_data(ttl=8 * 3600)   # 8 hours — refreshes well before next market open
+def get_20d_averages(symbols: tuple) -> dict:
+    """
+    Fetch 20-day avg volume and avg close price for each symbol via yfinance batch download.
+    Returns dict: { symbol: { "avg_vol": float|None, "avg_price": float|None } }
+    """
+    ns_syms = [s + ".NS" for s in symbols]
+    result  = {s: {"avg_vol": None, "avg_price": None} for s in symbols}
+    try:
+        raw = yf.download(ns_syms, period="20d", progress=False, auto_adjust=True)
+        if raw.empty:
+            return result
+
+        # yfinance returns MultiIndex (field, ticker) — access by field name directly
+        close_df  = raw["Close"]  if "Close"  in raw.columns.get_level_values(0) else None
+        volume_df = raw["Volume"] if "Volume" in raw.columns.get_level_values(0) else None
+
+        for sym, ns in zip(symbols, ns_syms):
+            avg_vol, avg_price = None, None
+            try:
+                if volume_df is not None and ns in volume_df.columns:
+                    avg_vol = float(volume_df[ns].dropna().mean())
+            except Exception:
+                pass
+            try:
+                if close_df is not None and ns in close_df.columns:
+                    avg_price = float(close_df[ns].dropna().mean())
+            except Exception:
+                pass
+            result[sym] = {"avg_vol": avg_vol, "avg_price": avg_price}
+    except Exception:
+        pass
+    return result

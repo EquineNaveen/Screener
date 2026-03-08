@@ -2,18 +2,17 @@ import streamlit as st
 import sys, os, time
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-from utils.data_loader import get_sectors
+from utils.data_loader import get_all_fo_stocks
 from utils.market_data import get_stocks_data, get_20d_averages, is_market_open
 from utils.fo_data import compute_fo_metrics
 
+# ─── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown('<div style="height:1px;background:#1a1a1a;margin:4px 0 16px 0;"></div>', unsafe_allow_html=True)
     refresh_interval = st.selectbox("Auto-refresh", ["Off", "30s", "60s", "2min", "5min"], index=2)
     if st.button("↺  Refresh Now"):
         st.cache_data.clear()
         st.rerun()
-
-
 
 # ─── Header ────────────────────────────────────────────────────────────────────
 market_open = is_market_open()
@@ -28,68 +27,71 @@ st.markdown(f"""
                  background:{bb};border:1px solid {bd};padding:3px 10px;border-radius:4px;letter-spacing:2px;">
         ● NSE {bl}
     </span>
-    <h1 style="font-size:2rem;font-weight:700;letter-spacing:-1px;margin:14px 0 4px 0;">Stocks by Sector</h1>
+    <h1 style="font-size:2rem;font-weight:700;letter-spacing:-1px;margin:14px 0 4px 0;">All F&amp;O Stocks</h1>
     <p style="color:#444;font-size:0.75rem;font-family:'IBM Plex Mono',monospace;margin:0;letter-spacing:0.5px;">
-        Select a sector · Click symbol to open TradingView chart
+        LTP · % Change · Relative Volume · Relative Turnover · Signal
     </p>
 </div>
 """, unsafe_allow_html=True)
 
 # ─── Controls ──────────────────────────────────────────────────────────────────
-sectors_map  = get_sectors()
-sector_names = list(sectors_map.keys())
-
-c1, c2, c3 = st.columns([3, 2, 2])
+c1, c2, c3 = st.columns([2, 2, 2])
 with c1:
-    selected   = st.selectbox("Sector", sector_names)
+    sort_opt = st.selectbox("Sort by", [
+        "% Change ↓", "% Change ↑",
+        "Rel Volume ↓", "Rel Turnover ↓",
+        "Symbol A-Z", "Price ↓"
+    ])
 with c2:
-    sort_opt   = st.selectbox("Sort by", ["% Change ↓", "% Change ↑", "Symbol A-Z", "Price ↓"])
+    filter_opt = st.selectbox("Filter", ["All", "Gainers", "Losers", "Momentum Only"])
 with c3:
-    filter_opt = st.selectbox("Filter", ["All", "Gainers", "Losers"])
-
-stocks = sectors_map.get(selected, [])
-
-st.markdown(f"""
-<div style="background:#161616;border:1px solid #222;border-left:2px solid #f5a623;
-            border-radius:8px;padding:12px 16px;margin:14px 0 6px 0;">
-    <span style="font-size:0.9rem;font-weight:600;">{selected}</span>
-    <span style="font-family:'IBM Plex Mono',monospace;font-size:0.7rem;color:#444;margin-left:10px;">
-        {len(stocks)} F&O stocks
-    </span>
-</div>
-""", unsafe_allow_html=True)
-
-if not stocks:
-    st.warning("No F&O stocks found for this sector.")
-    st.stop()
+    search_q = st.text_input("Search symbol", placeholder="e.g. RELIANCE", label_visibility="collapsed")
 
 # ─── Fetch ─────────────────────────────────────────────────────────────────────
-with st.spinner(f"Fetching data for {len(stocks)} stocks..."):
-    rows     = get_stocks_data(tuple(stocks))
-    averages = get_20d_averages(tuple(stocks))
-    rows     = compute_fo_metrics(rows, averages)
+all_stocks = get_all_fo_stocks()
+symbols    = tuple(all_stocks)
+
+with st.spinner(f"Fetching live data for {len(symbols)} F&O stocks..."):
+    live_rows = get_stocks_data(symbols)
+
+with st.spinner("Fetching 20-day averages (cached daily)..."):
+    averages = get_20d_averages(symbols)
+
+rows = compute_fo_metrics(live_rows, averages)
+
+# ─── Search ────────────────────────────────────────────────────────────────────
+if search_q.strip():
+    q = search_q.strip().upper()
+    rows = [r for r in rows if q in r["symbol"]]
 
 # ─── Filter ────────────────────────────────────────────────────────────────────
 if filter_opt == "Gainers":
     rows = [r for r in rows if r["pct"] is not None and r["pct"] > 0]
 elif filter_opt == "Losers":
     rows = [r for r in rows if r["pct"] is not None and r["pct"] < 0]
+elif filter_opt == "Momentum Only":
+    rows = [r for r in rows if r["signal"] == "Momentum 🚀"]
 
 # ─── Sort ──────────────────────────────────────────────────────────────────────
 if sort_opt == "% Change ↓":
     rows = sorted(rows, key=lambda r: (r["pct"] is None, -(r["pct"] if r["pct"] is not None else 0)))
 elif sort_opt == "% Change ↑":
     rows = sorted(rows, key=lambda r: (r["pct"] is None,  (r["pct"] if r["pct"] is not None else 0)))
+elif sort_opt == "Rel Volume ↓":
+    rows = sorted(rows, key=lambda r: (r["rel_vol"] is None, -(r["rel_vol"] if r["rel_vol"] is not None else 0)))
+elif sort_opt == "Rel Turnover ↓":
+    rows = sorted(rows, key=lambda r: (r["rel_turnover"] is None, -(r["rel_turnover"] if r["rel_turnover"] is not None else 0)))
 elif sort_opt == "Symbol A-Z":
     rows = sorted(rows, key=lambda r: r["symbol"])
 elif sort_opt == "Price ↓":
     rows = sorted(rows, key=lambda r: (r["price"] is None, -(r["price"] if r["price"] is not None else 0)))
 
-# ─── Summary ───────────────────────────────────────────────────────────────────
-g = sum(1 for r in rows if r["pct"] is not None and r["pct"] > 0)
-l = sum(1 for r in rows if r["pct"] is not None and r["pct"] < 0)
-n = len(rows) - g - l
-now_str = __import__('datetime').datetime.now().strftime('%H:%M:%S')
+# ─── Summary bar ───────────────────────────────────────────────────────────────
+g        = sum(1 for r in rows if r["pct"] is not None and r["pct"] > 0)
+l        = sum(1 for r in rows if r["pct"] is not None and r["pct"] < 0)
+n        = len(rows) - g - l
+momentum = sum(1 for r in rows if r["signal"] == "Momentum 🚀")
+now_str  = __import__('datetime').datetime.now().strftime('%H:%M:%S')
 
 st.markdown(f"""
 <div style="display:flex;gap:10px;align-items:center;margin:14px 0 16px;flex-wrap:wrap;">
@@ -99,17 +101,20 @@ st.markdown(f"""
                  padding:3px 12px;border-radius:4px;font-family:'IBM Plex Mono',monospace;font-size:0.7rem;">▼ {l} Losers</span>
     <span style="background:#1a1a1a;border:1px solid #2a2a2a;color:#444;
                  padding:3px 12px;border-radius:4px;font-family:'IBM Plex Mono',monospace;font-size:0.7rem;">— {n} N/A</span>
-    <span style="font-family:'IBM Plex Mono',monospace;font-size:0.65rem;color:#2a2a2a;">{now_str}</span>
+    <span style="background:rgba(245,166,35,0.08);border:1px solid rgba(245,166,35,0.25);color:#f5a623;
+                 padding:3px 12px;border-radius:4px;font-family:'IBM Plex Mono',monospace;font-size:0.7rem;">🚀 {momentum} Momentum</span>
+    <span style="font-family:'IBM Plex Mono',monospace;font-size:0.65rem;color:#2a2a2a;">{now_str} · {len(rows)} stocks</span>
 </div>
 """, unsafe_allow_html=True)
 
-# ─── Build full table as single HTML string ────────────────────────────────────
+# ─── Table ─────────────────────────────────────────────────────────────────────
 tbody = ""
 for i, r in enumerate(rows, 1):
     sym          = r["symbol"]
     price        = r["price"]
     pct          = r["pct"]
     tv_url       = r["tv_url"]
+    rel_vol      = r.get("rel_vol")
     rel_turnover = r.get("rel_turnover")
     signal       = r.get("signal", "No Signal")
 
@@ -122,7 +127,9 @@ for i, r in enumerate(rows, 1):
     else:
         pct_cell = f'<span style="color:#ef4444;font-weight:600;font-family:IBM Plex Mono,monospace;font-size:0.82rem;">&#9660; {pct:.2f}%</span>'
 
-    rt_str = f"{rel_turnover:.2f}x" if rel_turnover is not None else "&#8212;"
+    rv_str   = f"{rel_vol:.2f}x"      if rel_vol      is not None else "&#8212;"
+    rt_str   = f"{rel_turnover:.2f}x" if rel_turnover is not None else "&#8212;"
+    rv_color = "#f5a623" if rel_vol      is not None and rel_vol      > 2 else "#555"
     rt_color = "#f5a623" if rel_turnover is not None and rel_turnover > 2 else "#555"
 
     if signal == "Momentum 🚀":
@@ -133,33 +140,33 @@ for i, r in enumerate(rows, 1):
     row_bg = "#171717" if i % 2 == 0 else "#161616"
 
     tbody += f"""<tr style="background:{row_bg};border-bottom:1px solid #1e1e1e;">
-        <td style="padding:11px 14px;font-family:'IBM Plex Mono',monospace;font-size:0.68rem;color:#2a2a2a;width:40px;">{i}</td>
-        <td style="padding:11px 14px;">
+        <td style="padding:10px 14px;font-family:'IBM Plex Mono',monospace;font-size:0.68rem;color:#2a2a2a;width:36px;">{i}</td>
+        <td style="padding:10px 14px;">
             <a href="{tv_url}" target="_blank"
                style="font-family:'IBM Plex Mono',monospace;font-size:0.88rem;font-weight:600;
-                      color:#f5a623;text-decoration:none;letter-spacing:0.3px;">
-                {sym}
-            </a>
+                      color:#f5a623;text-decoration:none;letter-spacing:0.3px;">{sym}</a>
         </td>
-        <td style="padding:11px 14px;font-family:'IBM Plex Mono',monospace;font-size:0.82rem;color:#c0c0c0;">{price_str}</td>
-        <td style="padding:11px 14px;">{pct_cell}</td>
-        <td style="padding:11px 14px;font-family:'IBM Plex Mono',monospace;font-size:0.82rem;color:{rt_color};">{rt_str}</td>
-        <td style="padding:11px 14px;">{sig_cell}</td>
+        <td style="padding:10px 14px;font-family:'IBM Plex Mono',monospace;font-size:0.82rem;color:#c0c0c0;">{price_str}</td>
+        <td style="padding:10px 14px;">{pct_cell}</td>
+        <td style="padding:10px 14px;font-family:'IBM Plex Mono',monospace;font-size:0.82rem;color:{rv_color};">{rv_str}</td>
+        <td style="padding:10px 14px;font-family:'IBM Plex Mono',monospace;font-size:0.82rem;color:{rt_color};">{rt_str}</td>
+        <td style="padding:10px 14px;">{sig_cell}</td>
     </tr>"""
 
-th_style = "padding:10px 14px;text-align:left;font-family:'IBM Plex Mono',monospace;font-size:0.62rem;text-transform:uppercase;letter-spacing:1.5px;color:#333;font-weight:500;background:#111;"
+th = "padding:10px 14px;text-align:left;font-family:'IBM Plex Mono',monospace;font-size:0.62rem;text-transform:uppercase;letter-spacing:1.5px;color:#333;font-weight:500;background:#111;"
 
 table_html = f"""
 <div style="border:1px solid #1e1e1e;border-radius:10px;overflow:hidden;">
     <table style="width:100%;border-collapse:collapse;">
         <thead>
             <tr style="border-bottom:1px solid #222;">
-                <th style="{th_style}width:40px;">#</th>
-                <th style="{th_style}">Symbol</th>
-                <th style="{th_style}">Price</th>
-                <th style="{th_style}">Change</th>
-                <th style="{th_style}">Rel Turnover</th>
-                <th style="{th_style}">Signal</th>
+                <th style="{th}width:36px;">#</th>
+                <th style="{th}">Symbol</th>
+                <th style="{th}">LTP</th>
+                <th style="{th}">Change</th>
+                <th style="{th}">Rel Volume</th>
+                <th style="{th}">Rel Turnover</th>
+                <th style="{th}">Signal</th>
             </tr>
         </thead>
         <tbody>{tbody}</tbody>
@@ -168,14 +175,22 @@ table_html = f"""
 
 st.markdown(table_html, unsafe_allow_html=True)
 
-# ─── Auto-refresh (only when market is open) ───────────────────────────────────
+# ─── Auto-refresh ──────────────────────────────────────────────────────────────
 interval_map = {"30s": 30, "60s": 60, "2min": 120, "5min": 300}
 if refresh_interval != "Off":
     if market_open:
         secs = interval_map[refresh_interval]
-        st.markdown(f'<div style="font-family:IBM Plex Mono,monospace;font-size:0.62rem;color:#1e1e1e;text-align:center;margin-top:24px;">auto-refresh every {refresh_interval}</div>', unsafe_allow_html=True)
+        st.markdown(
+            f'<div style="font-family:IBM Plex Mono,monospace;font-size:0.62rem;'
+            f'color:#1e1e1e;text-align:center;margin-top:24px;">'
+            f'auto-refresh every {refresh_interval}</div>',
+            unsafe_allow_html=True)
         time.sleep(secs)
         st.cache_data.clear()
         st.rerun()
     else:
-        st.markdown('<div style="font-family:IBM Plex Mono,monospace;font-size:0.62rem;color:#2a2a2a;text-align:center;margin-top:24px;">auto-refresh paused — market closed</div>', unsafe_allow_html=True)
+        st.markdown(
+            '<div style="font-family:IBM Plex Mono,monospace;font-size:0.62rem;'
+            'color:#2a2a2a;text-align:center;margin-top:24px;">'
+            'auto-refresh paused — market closed</div>',
+            unsafe_allow_html=True)

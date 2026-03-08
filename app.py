@@ -80,10 +80,11 @@ if not st.session_state.get("authenticated"):
 # ─── Pages ─────────────────────────────────────────────────────────────────────
 sectors_page   = st.Page("pages/sectors.py",   title="Sectors Overview")
 stocks_page    = st.Page("pages/stocks.py",     title="Stocks by Sector")
+fo_stocks_page = st.Page("pages/fo_stocks.py",  title="All F&O Stocks")
 watchlist_page = st.Page("pages/watchlist.py",  title="My Watchlist")
 
 pg = st.navigation(
-    {"NSE F&O": [sectors_page, stocks_page, watchlist_page]},
+    {"NSE F&O": [sectors_page, stocks_page, fo_stocks_page, watchlist_page]},
     position="hidden",
 )
 
@@ -98,6 +99,7 @@ with st.sidebar:
 
     st.page_link(sectors_page,   label="📊  Sectors Overview")
     st.page_link(stocks_page,    label="🔍  Stocks by Sector")
+    st.page_link(fo_stocks_page, label="📈  All F&O Stocks")
     st.page_link(watchlist_page, label="⭐  My Watchlist")
 
     st.markdown(f"""
