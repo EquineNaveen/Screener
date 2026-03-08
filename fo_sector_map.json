@@ -331,6 +331,68 @@
       "PGEL",
       "TITAN",
       "VOLTAS"
+    ],
+    "NIFTY CAPITAL MARKET": [
+      "360ONE",
+      "ANGELONE",
+      "BSE",
+      "CDSL",
+      "CAMS",
+      "HDFCAMC",
+      "IEX",
+      "KFINTECH",
+      "MCX",
+      "NUVAMA"
+    ],
+    "NIFTY CPSE": [
+      "BEL",
+      "COALINDIA",
+      "NBCC",
+      "NHPC",
+      "NTPC",
+      "ONGC",
+      "OIL",
+      "POWERGRID"
+    ],
+    "NIFTY CEMENT":[
+      "ULTRACEMCO",
+      "GRASIM",
+      "AMBUJACEM",
+      "SHREECEM",
+      "DALBHARAT"
+    ],
+    "NIFTY PSE":[
+      "BEL",
+      "BHEL",
+      "BPCL",
+      "COALINDIA",
+      "CONCOR",
+      "GAIL",
+      "HAL",
+      "HINDPETRO",
+      "IOC",
+      "IRFC",
+      "NHPC",
+      "NMDC",
+      "NTPC",
+      "ONGC",
+      "OIL",
+      "PFC",
+      "POWERGRID",
+      "RECLTD",
+      "RVNL"
+    ],
+    "NIFTY MIDSMALL IT & TELECOM":[
+      "COFORGE",
+      "INDUSTOWER",
+      "KPITTECH",
+      "MPHASIS",
+      "OFSS",
+      "PERSISTENT",
+      "TATAELXSI",
+      "TATATECH",
+      "IDEA"
     ]
+
   }
 }
