@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import sys, os, time
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
@@ -43,7 +44,7 @@ c1, c2, c3 = st.columns([3, 2, 2])
 with c1:
     selected   = st.selectbox("Sector", sector_names)
 with c2:
-    sort_opt   = st.selectbox("Sort by", ["% Change ↓", "% Change ↑", "Symbol A-Z", "Price ↓"])
+    sort_opt   = st.selectbox("Sort by", ["% Change ↓", "% Change ↑", "Rel Turnover ↓", "Symbol A-Z", "Price ↓"])
 with c3:
     filter_opt = st.selectbox("Filter", ["All", "Gainers", "Losers"])
 
@@ -80,6 +81,8 @@ if sort_opt == "% Change ↓":
     rows = sorted(rows, key=lambda r: (r["pct"] is None, -(r["pct"] if r["pct"] is not None else 0)))
 elif sort_opt == "% Change ↑":
     rows = sorted(rows, key=lambda r: (r["pct"] is None,  (r["pct"] if r["pct"] is not None else 0)))
+elif sort_opt == "Rel Turnover ↓":
+    rows = sorted(rows, key=lambda r: (r["rel_turnover"] is None, -(r["rel_turnover"] if r["rel_turnover"] is not None else 0)))
 elif sort_opt == "Symbol A-Z":
     rows = sorted(rows, key=lambda r: r["symbol"])
 elif sort_opt == "Price ↓":
@@ -122,13 +125,13 @@ for i, r in enumerate(rows, 1):
     else:
         pct_cell = f'<span style="color:#ef4444;font-weight:600;font-family:IBM Plex Mono,monospace;font-size:0.82rem;">&#9660; {pct:.2f}%</span>'
 
-    rt_str = f"{rel_turnover:.2f}x" if rel_turnover is not None else "&#8212;"
+    rt_str   = f"{rel_turnover:.2f}" if rel_turnover is not None else "&#8212;"
     rt_color = "#f5a623" if rel_turnover is not None and rel_turnover > 2 else "#555"
 
     if signal == "Momentum 🚀":
-        sig_cell = '<span style="color:#22c55e;font-family:IBM Plex Mono,monospace;font-size:0.75rem;font-weight:600;">Momentum 🚀</span>'
+        sig_cell = '<span style="background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.3);color:#22c55e;font-family:IBM Plex Mono,monospace;font-size:0.72rem;font-weight:600;padding:2px 10px;border-radius:4px;">Momentum 🚀</span>'
     else:
-        sig_cell = '<span style="color:#333;font-family:IBM Plex Mono,monospace;font-size:0.75rem;">No Signal</span>'
+        sig_cell = '<span style="color:#2a2a2a;font-family:IBM Plex Mono,monospace;font-size:0.72rem;">No Signal</span>'
 
     row_bg = "#171717" if i % 2 == 0 else "#161616"
 
@@ -149,7 +152,10 @@ for i, r in enumerate(rows, 1):
 
 th_style = "padding:10px 14px;text-align:left;font-family:'IBM Plex Mono',monospace;font-size:0.62rem;text-transform:uppercase;letter-spacing:1.5px;color:#333;font-weight:500;background:#111;"
 
-table_html = f"""
+table_html = f"""<!DOCTYPE html><html><head><meta charset="utf-8">
+<style>* {{box-sizing:border-box;margin:0;padding:0;}}
+body {{background:transparent;}}
+</style></head><body>
 <div style="border:1px solid #1e1e1e;border-radius:10px;overflow:hidden;">
     <table style="width:100%;border-collapse:collapse;">
         <thead>
@@ -164,9 +170,13 @@ table_html = f"""
         </thead>
         <tbody>{tbody}</tbody>
     </table>
-</div>"""
+</div>
+</body></html>"""
 
-st.markdown(table_html, unsafe_allow_html=True)
+row_height   = 44
+header_h     = 42
+total_height = header_h + (len(rows) * row_height) + 20
+components.html(table_html, height=total_height, scrolling=False)
 
 # ─── Auto-refresh (only when market is open) ───────────────────────────────────
 interval_map = {"30s": 30, "60s": 60, "2min": 120, "5min": 300}

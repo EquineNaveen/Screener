@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import sys, os, time
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
@@ -35,7 +36,7 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # ─── Controls ──────────────────────────────────────────────────────────────────
-c1, c2, c3 = st.columns([2, 2, 2])
+c1, c2 = st.columns([2, 2])
 with c1:
     sort_opt = st.selectbox("Sort by", [
         "% Change ↓", "% Change ↑",
@@ -44,8 +45,6 @@ with c1:
     ])
 with c2:
     filter_opt = st.selectbox("Filter", ["All", "Gainers", "Losers", "Momentum Only"])
-with c3:
-    search_q = st.text_input("Search symbol", placeholder="e.g. RELIANCE", label_visibility="collapsed")
 
 # ─── Fetch ─────────────────────────────────────────────────────────────────────
 all_stocks = get_all_fo_stocks()
@@ -58,11 +57,6 @@ with st.spinner("Fetching 20-day averages (cached daily)..."):
     averages = get_20d_averages(symbols)
 
 rows = compute_fo_metrics(live_rows, averages)
-
-# ─── Search ────────────────────────────────────────────────────────────────────
-if search_q.strip():
-    q = search_q.strip().upper()
-    rows = [r for r in rows if q in r["symbol"]]
 
 # ─── Filter ────────────────────────────────────────────────────────────────────
 if filter_opt == "Gainers":
@@ -114,11 +108,13 @@ for i, r in enumerate(rows, 1):
     price        = r["price"]
     pct          = r["pct"]
     tv_url       = r["tv_url"]
+    volume       = r.get("volume")
     rel_vol      = r.get("rel_vol")
     rel_turnover = r.get("rel_turnover")
     signal       = r.get("signal", "No Signal")
 
-    price_str = f"&#8377;{price:,.2f}" if price is not None else "&#8212;"
+    price_str  = f"&#8377;{price:,.2f}" if price is not None else "&#8212;"
+    volume_str = f"{volume:,}" if volume is not None else "&#8212;"
 
     if pct is None:
         pct_cell = '<span style="color:#333;font-family:IBM Plex Mono,monospace;font-size:0.82rem;">&#8212;</span>'
@@ -127,15 +123,15 @@ for i, r in enumerate(rows, 1):
     else:
         pct_cell = f'<span style="color:#ef4444;font-weight:600;font-family:IBM Plex Mono,monospace;font-size:0.82rem;">&#9660; {pct:.2f}%</span>'
 
-    rv_str   = f"{rel_vol:.2f}x"      if rel_vol      is not None else "&#8212;"
-    rt_str   = f"{rel_turnover:.2f}x" if rel_turnover is not None else "&#8212;"
+    rv_str   = f"{rel_vol:.2f}"      if rel_vol      is not None else "&#8212;"
+    rt_str   = f"{rel_turnover:.2f}" if rel_turnover is not None else "&#8212;"
     rv_color = "#f5a623" if rel_vol      is not None and rel_vol      > 2 else "#555"
     rt_color = "#f5a623" if rel_turnover is not None and rel_turnover > 2 else "#555"
 
     if signal == "Momentum 🚀":
-        sig_cell = '<span style="color:#22c55e;font-family:IBM Plex Mono,monospace;font-size:0.75rem;font-weight:600;">Momentum 🚀</span>'
+        sig_cell = '<span style="background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.3);color:#22c55e;font-family:IBM Plex Mono,monospace;font-size:0.72rem;font-weight:600;padding:2px 10px;border-radius:4px;">Momentum 🚀</span>'
     else:
-        sig_cell = '<span style="color:#333;font-family:IBM Plex Mono,monospace;font-size:0.75rem;">No Signal</span>'
+        sig_cell = '<span style="color:#2a2a2a;font-family:IBM Plex Mono,monospace;font-size:0.72rem;">No Signal</span>'
 
     row_bg = "#171717" if i % 2 == 0 else "#161616"
 
@@ -148,6 +144,7 @@ for i, r in enumerate(rows, 1):
         </td>
         <td style="padding:10px 14px;font-family:'IBM Plex Mono',monospace;font-size:0.82rem;color:#c0c0c0;">{price_str}</td>
         <td style="padding:10px 14px;">{pct_cell}</td>
+        <td style="padding:10px 14px;font-family:'IBM Plex Mono',monospace;font-size:0.82rem;color:#c0c0c0;">{volume_str}</td>
         <td style="padding:10px 14px;font-family:'IBM Plex Mono',monospace;font-size:0.82rem;color:{rv_color};">{rv_str}</td>
         <td style="padding:10px 14px;font-family:'IBM Plex Mono',monospace;font-size:0.82rem;color:{rt_color};">{rt_str}</td>
         <td style="padding:10px 14px;">{sig_cell}</td>
@@ -155,7 +152,9 @@ for i, r in enumerate(rows, 1):
 
 th = "padding:10px 14px;text-align:left;font-family:'IBM Plex Mono',monospace;font-size:0.62rem;text-transform:uppercase;letter-spacing:1.5px;color:#333;font-weight:500;background:#111;"
 
-table_html = f"""
+table_html = f"""<!DOCTYPE html><html><head><meta charset="utf-8">
+<style>* {{box-sizing:border-box;margin:0;padding:0;}} body {{background:transparent;}}</style>
+</head><body>
 <div style="border:1px solid #1e1e1e;border-radius:10px;overflow:hidden;">
     <table style="width:100%;border-collapse:collapse;">
         <thead>
@@ -164,6 +163,7 @@ table_html = f"""
                 <th style="{th}">Symbol</th>
                 <th style="{th}">LTP</th>
                 <th style="{th}">Change</th>
+                <th style="{th}">Volume</th>
                 <th style="{th}">Rel Volume</th>
                 <th style="{th}">Rel Turnover</th>
                 <th style="{th}">Signal</th>
@@ -171,9 +171,13 @@ table_html = f"""
         </thead>
         <tbody>{tbody}</tbody>
     </table>
-</div>"""
+</div>
+</body></html>"""
 
-st.markdown(table_html, unsafe_allow_html=True)
+row_height   = 42
+header_h     = 42
+total_height = header_h + (len(rows) * row_height) + 20
+components.html(table_html, height=total_height, scrolling=True)
 
 # ─── Auto-refresh ──────────────────────────────────────────────────────────────
 interval_map = {"30s": 30, "60s": 60, "2min": 120, "5min": 300}

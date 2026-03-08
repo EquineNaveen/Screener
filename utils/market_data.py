@@ -1,6 +1,7 @@
 import yfinance as yf
 import pandas as pd
 import streamlit as st
+import os
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -253,36 +254,67 @@ def is_market_open():
 
 
 
-@st.cache_data(ttl=8 * 3600)   # 8 hours — refreshes well before next market open
+@st.cache_data(ttl=8 * 3600)
 def get_20d_averages(symbols: tuple) -> dict:
     """
-    Fetch 20-day avg volume and avg close price for each symbol via yfinance batch download.
-    Returns dict: { symbol: { "avg_vol": float|None, "avg_price": float|None } }
+    Fetch 20-day avg volume and avg close price.
+    Persists to disk (20d_averages_cache.json) so cache survives server restarts.
+    Refreshes if cache is older than 8 hours.
     """
+    import json as _json
+    from datetime import timedelta
+    from zoneinfo import ZoneInfo
+
+    CACHE_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "20d_averages_cache.json")
+    result     = {s: {"avg_vol": None, "avg_price": None} for s in symbols}
+
+    # ── Check disk cache ───────────────────────────────────────────────────────
+    if os.path.exists(CACHE_FILE):
+        try:
+            with open(CACHE_FILE, "r") as f:
+                cached = _json.load(f)
+            saved_at = datetime.fromisoformat(cached.get("saved_at", "2000-01-01"))
+            age_hours = (datetime.now() - saved_at).total_seconds() / 3600
+            if age_hours < 8:
+                data = cached.get("data", {})
+                for s in symbols:
+                    if s in data:
+                        result[s] = data[s]
+                return result
+        except Exception:
+            pass
+
+    # ── Fetch fresh from yfinance ──────────────────────────────────────────────
     ns_syms = [s + ".NS" for s in symbols]
-    result  = {s: {"avg_vol": None, "avg_price": None} for s in symbols}
     try:
         raw = yf.download(ns_syms, period="20d", progress=False, auto_adjust=True)
-        if raw.empty:
-            return result
+        if not raw.empty:
+            close_df  = raw["Close"]  if "Close"  in raw.columns.get_level_values(0) else None
+            volume_df = raw["Volume"] if "Volume" in raw.columns.get_level_values(0) else None
 
-        # yfinance returns MultiIndex (field, ticker) — access by field name directly
-        close_df  = raw["Close"]  if "Close"  in raw.columns.get_level_values(0) else None
-        volume_df = raw["Volume"] if "Volume" in raw.columns.get_level_values(0) else None
-
-        for sym, ns in zip(symbols, ns_syms):
-            avg_vol, avg_price = None, None
-            try:
-                if volume_df is not None and ns in volume_df.columns:
-                    avg_vol = float(volume_df[ns].dropna().mean())
-            except Exception:
-                pass
-            try:
-                if close_df is not None and ns in close_df.columns:
-                    avg_price = float(close_df[ns].dropna().mean())
-            except Exception:
-                pass
-            result[sym] = {"avg_vol": avg_vol, "avg_price": avg_price}
+            for sym, ns in zip(symbols, ns_syms):
+                avg_vol, avg_price = None, None
+                try:
+                    col = volume_df[ns] if (volume_df is not None and ns in volume_df.columns) else None
+                    if col is not None:
+                        avg_vol = float(col.dropna().mean())
+                except Exception:
+                    pass
+                try:
+                    col = close_df[ns] if (close_df is not None and ns in close_df.columns) else None
+                    if col is not None:
+                        avg_price = float(col.dropna().mean())
+                except Exception:
+                    pass
+                result[sym] = {"avg_vol": avg_vol, "avg_price": avg_price}
     except Exception:
         pass
+
+    # ── Save to disk ───────────────────────────────────────────────────────────
+    try:
+        with open(CACHE_FILE, "w") as f:
+            _json.dump({"saved_at": datetime.now().isoformat(), "data": result}, f)
+    except Exception:
+        pass
+
     return result
