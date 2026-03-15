@@ -3,9 +3,15 @@ import streamlit.components.v1 as components
 import sys, os, time
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-from utils.data_loader import get_all_fo_stocks
+from utils.data_loader import get_all_fo_stocks, get_sectors
 from utils.market_data import get_stocks_data, get_20d_averages, is_market_open
 from utils.fo_data import compute_fo_metrics
+
+# ─── Sector Lookup ─────────────────────────────────────────────────────────────
+sector_lookup = {}
+for sector_name, stock_list in get_sectors().items():
+    for sym in stock_list:
+        sector_lookup.setdefault(sym, []).append(sector_name)
 
 # ─── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
@@ -30,7 +36,7 @@ st.markdown(f"""
     </span>
     <h1 style="font-size:2rem;font-weight:700;letter-spacing:-1px;margin:14px 0 4px 0;">All F&amp;O Stocks</h1>
     <p style="color:#444;font-size:0.75rem;font-family:'IBM Plex Mono',monospace;margin:0;letter-spacing:0.5px;">
-        LTP · % Change · Relative Volume · Relative Turnover · Signal
+        LTP · % Change · Relative Volume · Relative Turnover
     </p>
 </div>
 """, unsafe_allow_html=True)
@@ -44,7 +50,7 @@ with c1:
         "Symbol A-Z", "Price ↓"
     ])
 with c2:
-    filter_opt = st.selectbox("Filter", ["All", "Gainers", "Losers", "Momentum Only"])
+    filter_opt = st.selectbox("Filter", ["All", "Gainers", "Losers"])
 
 # ─── Fetch ─────────────────────────────────────────────────────────────────────
 all_stocks = get_all_fo_stocks()
@@ -63,8 +69,6 @@ if filter_opt == "Gainers":
     rows = [r for r in rows if r["pct"] is not None and r["pct"] > 0]
 elif filter_opt == "Losers":
     rows = [r for r in rows if r["pct"] is not None and r["pct"] < 0]
-elif filter_opt == "Momentum Only":
-    rows = [r for r in rows if r["signal"] == "Momentum 🚀"]
 
 # ─── Sort ──────────────────────────────────────────────────────────────────────
 if sort_opt == "% Change ↓":
@@ -81,11 +85,10 @@ elif sort_opt == "Price ↓":
     rows = sorted(rows, key=lambda r: (r["price"] is None, -(r["price"] if r["price"] is not None else 0)))
 
 # ─── Summary bar ───────────────────────────────────────────────────────────────
-g        = sum(1 for r in rows if r["pct"] is not None and r["pct"] > 0)
-l        = sum(1 for r in rows if r["pct"] is not None and r["pct"] < 0)
-n        = len(rows) - g - l
-momentum = sum(1 for r in rows if r["signal"] == "Momentum 🚀")
-now_str  = __import__('datetime').datetime.now().strftime('%H:%M:%S')
+g       = sum(1 for r in rows if r["pct"] is not None and r["pct"] > 0)
+l       = sum(1 for r in rows if r["pct"] is not None and r["pct"] < 0)
+n       = len(rows) - g - l
+now_str = __import__('datetime').datetime.now().strftime('%H:%M:%S')
 
 st.markdown(f"""
 <div style="display:flex;gap:10px;align-items:center;margin:14px 0 16px;flex-wrap:wrap;">
@@ -95,8 +98,6 @@ st.markdown(f"""
                  padding:3px 12px;border-radius:4px;font-family:'IBM Plex Mono',monospace;font-size:0.7rem;">▼ {l} Losers</span>
     <span style="background:#1a1a1a;border:1px solid #2a2a2a;color:#444;
                  padding:3px 12px;border-radius:4px;font-family:'IBM Plex Mono',monospace;font-size:0.7rem;">— {n} N/A</span>
-    <span style="background:rgba(245,166,35,0.08);border:1px solid rgba(245,166,35,0.25);color:#f5a623;
-                 padding:3px 12px;border-radius:4px;font-family:'IBM Plex Mono',monospace;font-size:0.7rem;">🚀 {momentum} Momentum</span>
     <span style="font-family:'IBM Plex Mono',monospace;font-size:0.65rem;color:#2a2a2a;">{now_str} · {len(rows)} stocks</span>
 </div>
 """, unsafe_allow_html=True)
@@ -111,7 +112,9 @@ for i, r in enumerate(rows, 1):
     volume       = r.get("volume")
     rel_vol      = r.get("rel_vol")
     rel_turnover = r.get("rel_turnover")
-    signal       = r.get("signal", "No Signal")
+
+    sectors     = sector_lookup.get(sym, [])
+    sector_str  = ", ".join(sectors) if sectors else "—"
 
     price_str  = f"&#8377;{price:,.2f}" if price is not None else "&#8212;"
     volume_str = f"{volume:,}" if volume is not None else "&#8212;"
@@ -123,15 +126,8 @@ for i, r in enumerate(rows, 1):
     else:
         pct_cell = f'<span style="color:#ef4444;font-weight:600;font-family:IBM Plex Mono,monospace;font-size:0.82rem;">&#9660; {pct:.2f}%</span>'
 
-    rv_str   = f"{rel_vol:.2f}"      if rel_vol      is not None else "&#8212;"
-    rt_str   = f"{rel_turnover:.2f}" if rel_turnover is not None else "&#8212;"
-    rv_color = "#f5a623" if rel_vol      is not None and rel_vol      > 2 else "#555"
-    rt_color = "#f5a623" if rel_turnover is not None and rel_turnover > 2 else "#555"
-
-    if signal == "Momentum 🚀":
-        sig_cell = '<span style="background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.3);color:#22c55e;font-family:IBM Plex Mono,monospace;font-size:0.72rem;font-weight:600;padding:2px 10px;border-radius:4px;">Momentum 🚀</span>'
-    else:
-        sig_cell = '<span style="color:#2a2a2a;font-family:IBM Plex Mono,monospace;font-size:0.72rem;">No Signal</span>'
+    rv_str = f"{rel_vol:.2f}"      if rel_vol      is not None else "&#8212;"
+    rt_str = f"{rel_turnover:.2f}" if rel_turnover is not None else "&#8212;"
 
     row_bg = "#171717" if i % 2 == 0 else "#161616"
 
@@ -142,12 +138,12 @@ for i, r in enumerate(rows, 1):
                style="font-family:'IBM Plex Mono',monospace;font-size:0.88rem;font-weight:600;
                       color:#f5a623;text-decoration:none;letter-spacing:0.3px;">{sym}</a>
         </td>
+        <td style="padding:10px 14px;font-family:'IBM Plex Mono',monospace;font-size:0.72rem;color:#666;max-width:220px;">{sector_str}</td>
         <td style="padding:10px 14px;font-family:'IBM Plex Mono',monospace;font-size:0.82rem;color:#c0c0c0;">{price_str}</td>
         <td style="padding:10px 14px;">{pct_cell}</td>
         <td style="padding:10px 14px;font-family:'IBM Plex Mono',monospace;font-size:0.82rem;color:#c0c0c0;">{volume_str}</td>
-        <td style="padding:10px 14px;font-family:'IBM Plex Mono',monospace;font-size:0.82rem;color:{rv_color};">{rv_str}</td>
-        <td style="padding:10px 14px;font-family:'IBM Plex Mono',monospace;font-size:0.82rem;color:{rt_color};">{rt_str}</td>
-        <td style="padding:10px 14px;">{sig_cell}</td>
+        <td style="padding:10px 14px;font-family:'IBM Plex Mono',monospace;font-size:0.82rem;color:#c0c0c0;">{rv_str}</td>
+        <td style="padding:10px 14px;font-family:'IBM Plex Mono',monospace;font-size:0.82rem;color:#c0c0c0;">{rt_str}</td>
     </tr>"""
 
 th = "padding:10px 14px;text-align:left;font-family:'IBM Plex Mono',monospace;font-size:0.62rem;text-transform:uppercase;letter-spacing:1.5px;color:#333;font-weight:500;background:#111;"
@@ -161,12 +157,12 @@ table_html = f"""<!DOCTYPE html><html><head><meta charset="utf-8">
             <tr style="border-bottom:1px solid #222;">
                 <th style="{th}width:36px;">#</th>
                 <th style="{th}">Symbol</th>
+                <th style="{th}">Sector</th>
                 <th style="{th}">LTP</th>
                 <th style="{th}">Change</th>
                 <th style="{th}">Volume</th>
                 <th style="{th}">Rel Volume</th>
                 <th style="{th}">Rel Turnover</th>
-                <th style="{th}">Signal</th>
             </tr>
         </thead>
         <tbody>{tbody}</tbody>
