@@ -1,14 +1,11 @@
 import yfinance as yf
 import pandas as pd
 import streamlit as st
-import os
-import json as _json
-from datetime import datetime
+from datetime import datetime, date, timedelta
 from zoneinfo import ZoneInfo
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
 
 IST = ZoneInfo("Asia/Kolkata")
-CACHE_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "20d_averages_cache.json")
 
 # -----------------------------------------------
 # Sector Index Ticker Mapping
@@ -91,27 +88,75 @@ SECTOR_TV_MAP = {
 }
 
 
+# -----------------------------------------------
+# IST Helpers
+# -----------------------------------------------
+
+def _ist_now() -> datetime:
+    """Current IST-aware datetime."""
+    return datetime.now(IST)
+
+
+def _current_trading_date() -> date:
+    """
+    Returns the 'active trading date' in IST.
+
+    Before 9:15 AM IST  -> return yesterday's date.
+      Pre-open window; today's market hasn't started yet.
+      Returning yesterday prevents a premature re-fetch on
+      an early-morning Streamlit auto-refresh rerun.
+
+    From 9:15 AM onward -> return today's date.
+      Market is open or has already opened/closed for the day.
+
+    This means get_20d_averages() fetches exactly once per trading
+    day, triggered on the first call at or after 9:15 AM IST.
+    """
+    now    = _ist_now()
+    cutoff = now.replace(hour=9, minute=15, second=0, microsecond=0)
+    if now < cutoff:
+        return (now - timedelta(days=1)).date()
+    return now.date()
+
+
+# -----------------------------------------------
+# Market Status
+# -----------------------------------------------
+
+def is_market_open() -> bool:
+    now = _ist_now()
+    if now.weekday() >= 5:
+        return False
+    market_open  = now.replace(hour=9,  minute=15, second=0, microsecond=0)
+    market_close = now.replace(hour=15, minute=30, second=0, microsecond=0)
+    return market_open <= now <= market_close
+
+
+# -----------------------------------------------
+# Sector Data Fetchers
+# -----------------------------------------------
+
 def _fetch_nse_index(index_name: str):
     """Primary: NSE API direct fetch for sector index % change."""
     import requests, urllib.parse, time
     session = requests.Session()
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "Accept": "application/json",
-        "Referer": "https://www.nseindia.com/",
+        "Accept":     "application/json",
+        "Referer":    "https://www.nseindia.com/",
     }
     try:
         session.get("https://www.nseindia.com", headers=headers, timeout=5)
         time.sleep(0.2)
         encoded = urllib.parse.quote(index_name)
-        url = f"https://www.nseindia.com/api/equity-stockIndices?index={encoded}"
-        resp = session.get(url, headers=headers, timeout=8)
+        url     = f"https://www.nseindia.com/api/equity-stockIndices?index={encoded}"
+        resp    = session.get(url, headers=headers, timeout=8)
         if resp.status_code == 200:
             records = resp.json().get("data", [])
             if records:
-                idx   = records[0]
-                last  = idx.get("last") or idx.get("lastPrice") or idx.get("indexValue")
-                pct   = idx.get("pChange") or idx.get("percentChange")
+                idx  = records[0]
+                last = idx.get("last") or idx.get("lastPrice") or idx.get("indexValue")
+                pct  = idx.get("pChange") or idx.get("percentChange")
                 if pct is not None:
                     return round(float(pct), 2), (round(float(last), 2) if last else None)
                 prev = idx.get("previousClose") or idx.get("previousDay")
@@ -129,7 +174,7 @@ def _fetch_yfinance_index(ticker_sym: str):
         t    = yf.Ticker(ticker_sym)
         info = t.fast_info
         prev = info.get("previousClose") or info.get("regular_market_previous_close")
-        curr = info.get("lastPrice") or info.get("regular_market_price")
+        curr = info.get("lastPrice")     or info.get("regular_market_price")
         if prev and curr and float(prev) != 0:
             pct = ((float(curr) - float(prev)) / float(prev)) * 100
             return round(pct, 2), round(float(curr), 2)
@@ -156,7 +201,7 @@ def _fetch_avg_pct(stocks: list):
 
 
 def _fetch_one_sector(args):
-    """Fetch a single sector — same priority logic as before, runs in thread pool."""
+    """Fetch a single sector — NSE API -> yfinance index -> avg of stocks."""
     sector, sector_stocks = args
     nse_name   = SECTOR_NSE_API_MAP.get(sector)
     ticker_sym = SECTOR_TICKER_MAP.get(sector)
@@ -194,14 +239,13 @@ def _fetch_one_sector(args):
 def get_sector_data(sector_names: tuple, sector_stocks_json: str):
     """
     Fetch % change for each sector.
-    Priority: NSE API -> yfinance index -> avg of stocks
-    sector_stocks_json: JSON string of sectors dict (hashable for st.cache_data)
+    Priority: NSE API -> yfinance index -> avg of stocks.
+    sector_stocks_json: JSON string of sectors dict (hashable for st.cache_data).
     """
     import json
     sector_stocks = json.loads(sector_stocks_json)
-
-    args = [(sector, sector_stocks) for sector in sector_names]
-    results_map = {}
+    args          = [(sector, sector_stocks) for sector in sector_names]
+    results_map   = {}
 
     with ThreadPoolExecutor(max_workers=20) as pool:
         for sector, result in pool.map(_fetch_one_sector, args):
@@ -210,13 +254,17 @@ def get_sector_data(sector_names: tuple, sector_stocks_json: str):
     return [results_map[s] for s in sector_names]
 
 
+# -----------------------------------------------
+# Stock Data Fetcher
+# -----------------------------------------------
+
 def _fetch_one_stock(args):
-    """Fetch a single stock — price, pct, volume all via yfinance fast_info."""
-    sym, ns_sym = args
+    """Fetch a single stock — price, pct, volume via yfinance fast_info."""
+    sym, ns_sym        = args
     pct, price, volume = None, None, None
     try:
         tickers = yf.Tickers(ns_sym)
-        t = tickers.tickers.get(ns_sym)
+        t       = tickers.tickers.get(ns_sym)
         if t:
             info = t.fast_info
             prev = info.get("previousClose") or info.get("regularMarketPreviousClose")
@@ -243,7 +291,7 @@ def _fetch_one_stock(args):
 def get_stocks_data(symbols: tuple):
     """
     Fetch price, pct, volume for NSE stocks via yfinance fast_info.
-    Returns list of dicts.
+    Returns list of dicts. Cached for 60 seconds.
     """
     ns_syms = [s + ".NS" for s in symbols]
     args    = list(zip(symbols, ns_syms))
@@ -256,48 +304,48 @@ def get_stocks_data(symbols: tuple):
     return [results_map[s] for s in symbols]
 
 
-def is_market_open() -> bool:
-    now = datetime.now(IST)
-    if now.weekday() >= 5:
-        return False
-    market_open  = now.replace(hour=9,  minute=15, second=0, microsecond=0)
-    market_close = now.replace(hour=15, minute=30, second=0, microsecond=0)
-    return market_open <= now <= market_close
+# -----------------------------------------------
+# 20-Day Averages  (session_state cache — no cron, no disk)
+# -----------------------------------------------
 
-
-def _ist_now() -> datetime:
-    """Current IST-aware datetime."""
-    return datetime.now(IST)
-
-
-def _cache_age_hours(saved_at_iso: str) -> float:
-    """Return age of cache in hours using IST-aware comparison."""
-    saved_at = datetime.fromisoformat(saved_at_iso)
-    # If saved_at is naive (old cache written without tz), treat as IST
-    if saved_at.tzinfo is None:
-        saved_at = saved_at.replace(tzinfo=IST)
-    return (_ist_now() - saved_at).total_seconds() / 3600
-
-
-def _is_same_trading_day(saved_at_iso: str) -> bool:
+def get_20d_averages(symbols: tuple) -> dict:
     """
-    Returns True if the cache was saved today (IST) after 8:30 AM,
-    meaning it already has today's pre-market data.
-    """
-    saved_at = datetime.fromisoformat(saved_at_iso)
-    if saved_at.tzinfo is None:
-        saved_at = saved_at.replace(tzinfo=IST)
-    now = _ist_now()
-    cutoff = now.replace(hour=8, minute=30, second=0, microsecond=0)
-    return saved_at.date() == now.date() and saved_at >= cutoff
+    Returns 20-day average volume and average close price per symbol.
 
+    Cache strategy (Streamlit Cloud compatible — no cron, no disk):
+    ─────────────────────────────────────────────────────────────────
+    Data is stored in st.session_state["20d_avg_cache"] as:
+        {
+            "trading_date": date,        # IST date object — cache key
+            "fetched_at":   str,         # human-readable IST timestamp
+            "data":         dict,        # {symbol: {avg_vol, avg_price}}
+        }
 
-def fetch_and_save_20d_averages(symbols: tuple) -> dict:
+    How the date key works:
+      - _current_trading_date() returns yesterday before 9:15 AM IST
+        (pre-open window — no premature re-fetch on early reruns).
+      - From 9:15 AM onward it returns today's date.
+      - When the stored trading_date no longer matches the current one,
+        the cache is discarded and a fresh yfinance download runs.
+
+    Result: exactly ONE yfinance fetch per trading day, triggered on
+    the first Streamlit run at or after 9:15 AM IST. All subsequent
+    reruns (auto-refresh, manual refresh, page navigation) within the
+    same session hit the in-memory cache instantly.
+
+    On Streamlit Cloud, the server typically restarts overnight which
+    clears session_state automatically — so the next morning's first
+    load always gets a clean fetch.
     """
-    Core fetch logic — downloads 20d data from yfinance and writes to disk.
-    Called by both get_20d_averages() and the cron script (precompute_averages.py).
-    No Streamlit dependency — safe to run outside Streamlit.
-    """
+    trading_date = _current_trading_date()
+    state_key    = "20d_avg_cache"
+
+    # ── Hit: same trading day already fetched ─────────────────────────────────
+    cached = st.session_state.get(state_key)
+    if cached and cached.get("trading_date") == trading_date:
+        return cached["data"]
+
+    # ── Miss: new trading day or first ever load — fetch from yfinance ────────
     result  = {s: {"avg_vol": None, "avg_price": None} for s in symbols}
     ns_syms = [s + ".NS" for s in symbols]
 
@@ -322,61 +370,15 @@ def fetch_and_save_20d_averages(symbols: tuple) -> dict:
                 except Exception:
                     pass
                 result[sym] = {"avg_vol": avg_vol, "avg_price": avg_price}
-    except Exception as e:
-        print(f"[20d_averages] yfinance fetch failed: {e}")
 
-    # Save to disk with IST timestamp
-    try:
-        with open(CACHE_FILE, "w") as f:
-            _json.dump({
-                "saved_at": _ist_now().isoformat(),
-                "data":     result
-            }, f)
-        print(f"[20d_averages] Saved {len(result)} symbols at {_ist_now().strftime('%H:%M:%S IST')}")
     except Exception as e:
-        print(f"[20d_averages] Failed to write cache: {e}")
+        st.warning(f"[20d averages] yfinance fetch failed: {e}")
+
+    # ── Store in session_state — keyed by IST trading date ───────────────────
+    st.session_state[state_key] = {
+        "trading_date": trading_date,
+        "fetched_at":   _ist_now().strftime("%d %b %Y  %H:%M:%S IST"),
+        "data":         result,
+    }
 
     return result
-
-
-@st.cache_data(ttl=8 * 3600)
-def get_20d_averages(symbols: tuple) -> dict:
-    """
-    Returns 20-day avg volume and avg close price per symbol.
-
-    Cache priority:
-      1. Disk cache — if saved today (IST) after 8:30 AM → use it (no re-fetch)
-      2. Disk cache — if age < 8 hours → use it
-      3. Fetch fresh from yfinance and save to disk
-    """
-    result = {s: {"avg_vol": None, "avg_price": None} for s in symbols}
-
-    # ── Check disk cache ───────────────────────────────────────────────────────
-    if os.path.exists(CACHE_FILE):
-        try:
-            with open(CACHE_FILE, "r") as f:
-                cached = _json.load(f)
-
-            saved_at = cached.get("saved_at", "2000-01-01")
-
-            # If cron already ran today after 8:30 AM IST → trust it fully
-            if _is_same_trading_day(saved_at):
-                data = cached.get("data", {})
-                for s in symbols:
-                    if s in data:
-                        result[s] = data[s]
-                return result
-
-            # Fallback: use cache if it's less than 8 hours old
-            if _cache_age_hours(saved_at) < 8:
-                data = cached.get("data", {})
-                for s in symbols:
-                    if s in data:
-                        result[s] = data[s]
-                return result
-
-        except Exception:
-            pass
-
-    # ── Cache stale or missing — fetch fresh ──────────────────────────────────
-    return fetch_and_save_20d_averages(symbols)
