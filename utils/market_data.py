@@ -2,8 +2,13 @@ import yfinance as yf
 import pandas as pd
 import streamlit as st
 import os
+import json as _json
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+IST = ZoneInfo("Asia/Kolkata")
+CACHE_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "20d_averages_cache.json")
 
 # -----------------------------------------------
 # Sector Index Ticker Mapping
@@ -202,7 +207,6 @@ def get_sector_data(sector_names: tuple, sector_stocks_json: str):
         for sector, result in pool.map(_fetch_one_sector, args):
             results_map[sector] = result
 
-    # preserve original order
     return [results_map[s] for s in sector_names]
 
 
@@ -252,48 +256,51 @@ def get_stocks_data(symbols: tuple):
     return [results_map[s] for s in symbols]
 
 
-def is_market_open():
-    from zoneinfo import ZoneInfo
-    now = datetime.now(ZoneInfo("Asia/Kolkata"))
+def is_market_open() -> bool:
+    now = datetime.now(IST)
     if now.weekday() >= 5:
         return False
-    return now.replace(hour=9, minute=15, second=0, microsecond=0) <= now <= now.replace(hour=15, minute=30, second=0, microsecond=0)
+    market_open  = now.replace(hour=9,  minute=15, second=0, microsecond=0)
+    market_close = now.replace(hour=15, minute=30, second=0, microsecond=0)
+    return market_open <= now <= market_close
 
 
+def _ist_now() -> datetime:
+    """Current IST-aware datetime."""
+    return datetime.now(IST)
 
 
-@st.cache_data(ttl=8 * 3600)
-def get_20d_averages(symbols: tuple) -> dict:
+def _cache_age_hours(saved_at_iso: str) -> float:
+    """Return age of cache in hours using IST-aware comparison."""
+    saved_at = datetime.fromisoformat(saved_at_iso)
+    # If saved_at is naive (old cache written without tz), treat as IST
+    if saved_at.tzinfo is None:
+        saved_at = saved_at.replace(tzinfo=IST)
+    return (_ist_now() - saved_at).total_seconds() / 3600
+
+
+def _is_same_trading_day(saved_at_iso: str) -> bool:
     """
-    Fetch 20-day avg volume and avg close price.
-    Persists to disk (20d_averages_cache.json) so cache survives server restarts.
-    Refreshes if cache is older than 8 hours.
+    Returns True if the cache was saved today (IST) after 8:30 AM,
+    meaning it already has today's pre-market data.
     """
-    import json as _json
-    from datetime import timedelta
-    from zoneinfo import ZoneInfo
+    saved_at = datetime.fromisoformat(saved_at_iso)
+    if saved_at.tzinfo is None:
+        saved_at = saved_at.replace(tzinfo=IST)
+    now = _ist_now()
+    cutoff = now.replace(hour=8, minute=30, second=0, microsecond=0)
+    return saved_at.date() == now.date() and saved_at >= cutoff
 
-    CACHE_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "20d_averages_cache.json")
-    result     = {s: {"avg_vol": None, "avg_price": None} for s in symbols}
 
-    # ── Check disk cache ───────────────────────────────────────────────────────
-    if os.path.exists(CACHE_FILE):
-        try:
-            with open(CACHE_FILE, "r") as f:
-                cached = _json.load(f)
-            saved_at = datetime.fromisoformat(cached.get("saved_at", "2000-01-01"))
-            age_hours = (datetime.now() - saved_at).total_seconds() / 3600
-            if age_hours < 8:
-                data = cached.get("data", {})
-                for s in symbols:
-                    if s in data:
-                        result[s] = data[s]
-                return result
-        except Exception:
-            pass
-
-    # ── Fetch fresh from yfinance ──────────────────────────────────────────────
+def fetch_and_save_20d_averages(symbols: tuple) -> dict:
+    """
+    Core fetch logic — downloads 20d data from yfinance and writes to disk.
+    Called by both get_20d_averages() and the cron script (precompute_averages.py).
+    No Streamlit dependency — safe to run outside Streamlit.
+    """
+    result  = {s: {"avg_vol": None, "avg_price": None} for s in symbols}
     ns_syms = [s + ".NS" for s in symbols]
+
     try:
         raw = yf.download(ns_syms, period="20d", progress=False, auto_adjust=True)
         if not raw.empty:
@@ -315,14 +322,61 @@ def get_20d_averages(symbols: tuple) -> dict:
                 except Exception:
                     pass
                 result[sym] = {"avg_vol": avg_vol, "avg_price": avg_price}
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[20d_averages] yfinance fetch failed: {e}")
 
-    # ── Save to disk ───────────────────────────────────────────────────────────
+    # Save to disk with IST timestamp
     try:
         with open(CACHE_FILE, "w") as f:
-            _json.dump({"saved_at": datetime.now().isoformat(), "data": result}, f)
-    except Exception:
-        pass
+            _json.dump({
+                "saved_at": _ist_now().isoformat(),
+                "data":     result
+            }, f)
+        print(f"[20d_averages] Saved {len(result)} symbols at {_ist_now().strftime('%H:%M:%S IST')}")
+    except Exception as e:
+        print(f"[20d_averages] Failed to write cache: {e}")
 
     return result
+
+
+@st.cache_data(ttl=8 * 3600)
+def get_20d_averages(symbols: tuple) -> dict:
+    """
+    Returns 20-day avg volume and avg close price per symbol.
+
+    Cache priority:
+      1. Disk cache — if saved today (IST) after 8:30 AM → use it (no re-fetch)
+      2. Disk cache — if age < 8 hours → use it
+      3. Fetch fresh from yfinance and save to disk
+    """
+    result = {s: {"avg_vol": None, "avg_price": None} for s in symbols}
+
+    # ── Check disk cache ───────────────────────────────────────────────────────
+    if os.path.exists(CACHE_FILE):
+        try:
+            with open(CACHE_FILE, "r") as f:
+                cached = _json.load(f)
+
+            saved_at = cached.get("saved_at", "2000-01-01")
+
+            # If cron already ran today after 8:30 AM IST → trust it fully
+            if _is_same_trading_day(saved_at):
+                data = cached.get("data", {})
+                for s in symbols:
+                    if s in data:
+                        result[s] = data[s]
+                return result
+
+            # Fallback: use cache if it's less than 8 hours old
+            if _cache_age_hours(saved_at) < 8:
+                data = cached.get("data", {})
+                for s in symbols:
+                    if s in data:
+                        result[s] = data[s]
+                return result
+
+        except Exception:
+            pass
+
+    # ── Cache stale or missing — fetch fresh ──────────────────────────────────
+    return fetch_and_save_20d_averages(symbols)
