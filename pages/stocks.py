@@ -6,6 +6,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from utils.data_loader import get_sectors
 from utils.market_data import get_stocks_data, get_20d_averages, is_market_open
 from utils.fo_data import compute_fo_metrics
+from utils.auth import require_login
+require_login()
 
 with st.sidebar:
     st.markdown('<div style="height:1px;background:#1a1a1a;margin:4px 0 16px 0;"></div>', unsafe_allow_html=True)

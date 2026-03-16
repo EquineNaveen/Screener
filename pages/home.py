@@ -4,7 +4,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from utils.data_loader import get_sectors, get_metadata, get_all_fo_stocks
 from utils.market_data import is_market_open
-
+from utils.auth import require_login
+require_login()
 meta     = get_metadata()
 sectors  = get_sectors()
 all_stks = get_all_fo_stocks()

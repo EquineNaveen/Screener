@@ -6,7 +6,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from utils.data_loader import get_sectors
 from utils.market_data import get_sector_data, is_market_open, SECTOR_TV_MAP
 
-
+from utils.auth import require_login
+require_login()
 # ─── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown('<div style="height:1px;background:#1a1a1a;margin:4px 0 16px 0;"></div>',

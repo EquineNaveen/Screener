@@ -5,7 +5,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from utils.watchlist import get_watchlist, add_to_watchlist, remove_from_watchlist, update_note
 from utils.data_loader import get_all_fo_stocks
 from utils.market_data import get_stocks_data, is_market_open
-
+from utils.auth import require_login
+require_login()
 # ─── Auth guard ────────────────────────────────────────────────────────────────
 if not st.session_state.get("authenticated"):
     st.error("Please log in to view your watchlist.")
