@@ -173,7 +173,7 @@ table_html = f"""<!DOCTYPE html><html><head><meta charset="utf-8">
 row_height   = 42
 header_h     = 42
 total_height = header_h + (len(rows) * row_height) + 20
-components.html(table_html, height=total_height, scrolling=True)
+components.html(table_html, height=total_height, scrolling=False)
 
 # ─── Auto-refresh ──────────────────────────────────────────────────────────────
 interval_map = {"30s": 30, "60s": 60, "2min": 120, "5min": 300}
