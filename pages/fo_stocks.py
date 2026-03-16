@@ -120,7 +120,7 @@ for i, r in enumerate(rows, 1):
     volume_str = f"{volume:,}" if volume is not None else "&#8212;"
 
     if pct is None:
-        pct_cell = '<span style="color:#333;font-family:IBM Plex Mono,monospace;font-size:0.82rem;">&#8212;</span>'
+        pct_cell = '<span style="color:#888;font-family:IBM Plex Mono,monospace;font-size:0.82rem;">&#8212;</span>'
     elif pct >= 0:
         pct_cell = f'<span style="color:#22c55e;font-weight:600;font-family:IBM Plex Mono,monospace;font-size:0.82rem;">&#9650; +{pct:.2f}%</span>'
     else:
@@ -146,7 +146,7 @@ for i, r in enumerate(rows, 1):
         <td style="padding:10px 14px;font-family:'IBM Plex Mono',monospace;font-size:0.82rem;color:#c0c0c0;">{rt_str}</td>
     </tr>"""
 
-th = "padding:10px 14px;text-align:left;font-family:'IBM Plex Mono',monospace;font-size:0.62rem;text-transform:uppercase;letter-spacing:1.5px;color:#333;font-weight:500;background:#111;"
+th = "padding:10px 14px;text-align:left;font-family:'IBM Plex Mono',monospace;font-size:0.62rem;text-transform:uppercase;letter-spacing:1.5px;color:#888;font-weight:500;background:#111;"
 
 table_html = f"""<!DOCTYPE html><html><head><meta charset="utf-8">
 <style>* {{box-sizing:border-box;margin:0;padding:0;}} body {{background:transparent;}}</style>

@@ -79,7 +79,7 @@ watchlist = get_watchlist(username)
 
 if not watchlist:
     st.markdown("""
-    <div style="text-align:center;padding:60px 0;color:#333;
+    <div style="text-align:center;padding:60px 0;color:#888;
                 font-family:'IBM Plex Mono',monospace;font-size:0.8rem;">
         Your watchlist is empty. Add stocks above.
     </div>""", unsafe_allow_html=True)
@@ -111,7 +111,7 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # ─── Column headers ────────────────────────────────────────────────────────────
-th = "font-family:'IBM Plex Mono',monospace;font-size:0.6rem;text-transform:uppercase;letter-spacing:1.5px;color:#333;padding:0 4px 8px 4px;"
+th = "font-family:'IBM Plex Mono',monospace;font-size:0.6rem;text-transform:uppercase;letter-spacing:1.5px;color:#888;padding:0 4px 8px 4px;"
 st.markdown(f"""
 <div style="display:grid;grid-template-columns:1.2fr 0.9fr 0.9fr 3fr 0.4fr;
             gap:8px;padding:0 2px 6px 2px;border-bottom:1px solid #1e1e1e;margin-bottom:4px;">

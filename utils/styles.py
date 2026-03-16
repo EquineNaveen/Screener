@@ -7,7 +7,7 @@ GLOBAL_CSS = """
     --bg2:       #111111;
     --card:      #161616;
     --border:    #2a2a2a;
-    --border2:   #333;
+    --border2:   #888;
     --gold:      #f5a623;
     --gold2:     #e8870a;
     --green:     #22c55e;

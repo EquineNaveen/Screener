@@ -56,7 +56,7 @@ for col, val, label in cards:
 
 st.markdown("<br>", unsafe_allow_html=True)
 st.markdown('<div style="height:1px;background:linear-gradient(90deg,transparent,#2a2a2a,transparent);margin-bottom:28px;"></div>', unsafe_allow_html=True)
-st.markdown('<div style="font-size:0.62rem;color:#333;text-transform:uppercase;letter-spacing:2px;margin-bottom:14px;font-family:IBM Plex Mono,monospace;">Navigate</div>', unsafe_allow_html=True)
+st.markdown('<div style="font-size:0.62rem;color:#888;text-transform:uppercase;letter-spacing:2px;margin-bottom:14px;font-family:IBM Plex Mono,monospace;">Navigate</div>', unsafe_allow_html=True)
 
 n1, n2 = st.columns(2)
 with n1:

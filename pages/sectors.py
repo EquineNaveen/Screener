@@ -123,7 +123,7 @@ body { background: transparent; font-family: 'IBM Plex Mono', monospace; color: 
                white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .card-pct    { font-size: 1.65rem; font-weight: 700; line-height: 1; }
 .card-price  { font-size: 0.75rem; color: #555; margin-top: 4px; }
-.card-stocks { font-size: 0.62rem; color: #333; margin-top: 12px; }
+.card-stocks { font-size: 0.62rem; color: #888; margin-top: 12px; }
 .card-src    { position: absolute; bottom: 5px; right: 8px; font-size: 0.5rem; color: #222; }
 </style>
 </head>
