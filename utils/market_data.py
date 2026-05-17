@@ -173,8 +173,8 @@ def _fetch_yfinance_index(ticker_sym: str):
     try:
         t    = yf.Ticker(ticker_sym)
         info = t.fast_info
-        prev = info.get("previousClose") or info.get("regular_market_previous_close")
-        curr = info.get("lastPrice")     or info.get("regular_market_price")
+        prev = info.previous_close or info.regular_market_previous_close
+        curr = info.last_price
         if prev and curr and float(prev) != 0:
             pct = ((float(curr) - float(prev)) / float(prev)) * 100
             return round(pct, 2), round(float(curr), 2)
@@ -267,9 +267,9 @@ def _fetch_one_stock(args):
         t       = tickers.tickers.get(ns_sym)
         if t:
             info = t.fast_info
-            prev = info.get("previousClose") or info.get("regularMarketPreviousClose")
-            curr = info.get("lastPrice")
-            vol  = info.get("lastVolume")
+            prev = info.previous_close or info.regular_market_previous_close
+            curr = info.last_price
+            vol  = info.last_volume
             if prev and curr and float(prev) != 0:
                 pct   = round(((float(curr) - float(prev)) / float(prev)) * 100, 2)
                 price = round(float(curr), 2)
