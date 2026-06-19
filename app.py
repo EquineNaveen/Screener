@@ -78,15 +78,6 @@ if not st.session_state.get("authenticated"):
     st.stop()
 
 # ─── Pages ─────────────────────────────────────────────────────────────────────
-<<<<<<< HEAD
-sectors_page   = st.Page("pages/sectors.py",   title="Sectors Overview")
-stocks_page    = st.Page("pages/stocks.py",     title="Stocks by Sector")
-fo_stocks_page = st.Page("pages/fo_stocks.py",  title="All F&O Stocks")
-watchlist_page = st.Page("pages/watchlist.py",  title="My Watchlist")
-
-pg = st.navigation(
-    {"NSE F&O": [sectors_page, stocks_page, fo_stocks_page, watchlist_page]},
-=======
 sectors_page        = st.Page("pages/sectors.py",             title="Sectors Overview")
 stocks_page         = st.Page("pages/stocks.py",              title="Stocks by Sector")
 fo_stocks_page      = st.Page("pages/fo_stocks.py",           title="All F&O Stocks")
@@ -99,7 +90,6 @@ pg = st.navigation(
         "NSE F&O":   [sectors_page, stocks_page, fo_stocks_page, watchlist_page],
         "Momentum":  [momentum_page, portfolio_page],
     },
->>>>>>> master
     position="hidden",
 )
 
@@ -117,14 +107,11 @@ with st.sidebar:
     st.page_link(fo_stocks_page, label="📈  All F&O Stocks")
     st.page_link(watchlist_page, label="⭐  My Watchlist")
 
-<<<<<<< HEAD
-=======
     st.markdown('<div style="height:1px;background:#1e1e1e;margin:10px 0 10px 0;"></div>', unsafe_allow_html=True)
     st.markdown('<div style="font-family:\'IBM Plex Mono\',monospace;font-size:0.6rem;color:#333;text-transform:uppercase;letter-spacing:1.5px;padding:0 0 6px 4px;">Momentum</div>', unsafe_allow_html=True)
     st.page_link(momentum_page,  label="📐  Momentum Ranking")
     st.page_link(portfolio_page, label="💼  Portfolio & Rebalance")
 
->>>>>>> master
     st.markdown(f"""
     <div style="position:fixed;bottom:0;left:0;width:280px;padding:14px 20px;
                 background:#111;border-top:1px solid #1e1e1e;">
